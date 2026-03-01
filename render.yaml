@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: nutrigenius
+    runtime: node
+    buildCommand: chmod +x build.sh && bash build.sh
+    startCommand: cd server && node index.js
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false

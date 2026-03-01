@@ -1,0 +1,7 @@
+{
+  "name": "nutrigenius-db",
+  "type": "module",
+  "dependencies": {
+    "@libsql/client": "^0.6.0"
+  }
+}
