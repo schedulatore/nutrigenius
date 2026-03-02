@@ -6,7 +6,7 @@ const db = createClient({
 });
 
 async function migrate() {
-  console.log("🚀 Migrazione database...\n");
+  console.log("🥗 NutriGenius v2 - Migrazione database...\n");
 
   const tables = [
     "CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, role TEXT DEFAULT 'utente', created_at TEXT DEFAULT (datetime('now')))",
@@ -14,10 +14,11 @@ async function migrate() {
     "CREATE TABLE IF NOT EXISTS foods (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, calories REAL NOT NULL, protein REAL DEFAULT 0, carbs REAL DEFAULT 0, fat REAL DEFAULT 0, category TEXT, price REAL DEFAULT 0, unit TEXT DEFAULT 'kg', created_by TEXT, is_default INTEGER DEFAULT 1)",
     "CREATE TABLE IF NOT EXISTS diary_entries (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, food_id INTEGER, food_name TEXT NOT NULL, portion REAL DEFAULT 100, calories REAL NOT NULL, protein REAL DEFAULT 0, carbs REAL DEFAULT 0, fat REAL DEFAULT 0, meal_type TEXT DEFAULT 'altro', entry_date TEXT NOT NULL, entry_time TEXT, created_at TEXT DEFAULT (datetime('now')), FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)",
     "CREATE TABLE IF NOT EXISTS meal_plans (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, day_name TEXT NOT NULL, meal_type TEXT NOT NULL, meal_name TEXT NOT NULL, meal_desc TEXT, foods_json TEXT NOT NULL, portions_json TEXT NOT NULL, total_calories REAL DEFAULT 0, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)",
-    "CREATE TABLE IF NOT EXISTS shopping_items (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, food_id INTEGER, food_name TEXT NOT NULL, category TEXT, quantity REAL DEFAULT 0, unit TEXT DEFAULT 'kg', price REAL DEFAULT 0, checked INTEGER DEFAULT 0, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)",
+    "CREATE TABLE IF NOT EXISTS shopping_items (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, food_id INTEGER, food_name TEXT NOT NULL, category TEXT, quantity REAL DEFAULT 0, unit TEXT DEFAULT 'kg', price REAL DEFAULT 0, checked INTEGER DEFAULT 0, is_manual INTEGER DEFAULT 0, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)",
     "CREATE TABLE IF NOT EXISTS weight_log (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, weight REAL NOT NULL, log_date TEXT NOT NULL, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)",
-    "CREATE TABLE IF NOT EXISTS user_stats (user_id TEXT PRIMARY KEY, xp INTEGER DEFAULT 0, days_tracked INTEGER DEFAULT 0, last_tracked_date TEXT, streak INTEGER DEFAULT 0, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)",
+    "CREATE TABLE IF NOT EXISTS user_stats (user_id TEXT PRIMARY KEY, xp INTEGER DEFAULT 0, days_tracked INTEGER DEFAULT 0, last_tracked_date TEXT, streak INTEGER DEFAULT 0, challenges_done INTEGER DEFAULT 0, FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)",
     "CREATE TABLE IF NOT EXISTS chat_messages (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, role TEXT NOT NULL, message TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')), FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)",
+    "CREATE TABLE IF NOT EXISTS challenge_progress (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, challenge_id TEXT NOT NULL, progress INTEGER DEFAULT 0, completed INTEGER DEFAULT 0, started_at TEXT DEFAULT (datetime('now')), FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)",
   ];
 
   for (const sql of tables) {
@@ -25,6 +26,18 @@ async function migrate() {
     try { await db.execute(sql); console.log("  ✅ " + name); }
     catch (e) { console.error("  ❌ " + name + ": " + e.message); }
   }
+
+  // Add is_manual column to shopping_items if not exists (safe for existing DBs)
+  try {
+    await db.execute("ALTER TABLE shopping_items ADD COLUMN is_manual INTEGER DEFAULT 0");
+    console.log("  ✅ shopping_items.is_manual added");
+  } catch (e) { /* column already exists */ }
+
+  // Add challenges_done column to user_stats if not exists
+  try {
+    await db.execute("ALTER TABLE user_stats ADD COLUMN challenges_done INTEGER DEFAULT 0");
+    console.log("  ✅ user_stats.challenges_done added");
+  } catch (e) { /* column already exists */ }
 
   console.log("\n📦 Alimenti...");
   const count = await db.execute("SELECT COUNT(*) as c FROM foods");
@@ -66,7 +79,8 @@ async function migrate() {
 
   await db.execute("CREATE INDEX IF NOT EXISTS idx_diary ON diary_entries(user_id, entry_date)");
   await db.execute("CREATE INDEX IF NOT EXISTS idx_email ON users(email)");
-  console.log("\n🎉 Migrazione OK!\n");
+  await db.execute("CREATE INDEX IF NOT EXISTS idx_challenge ON challenge_progress(user_id, challenge_id)");
+  console.log("\n🎉 Migrazione v2 OK!\n");
 }
 
 migrate().catch(e => { console.error("❌ " + e.message); process.exit(1); });

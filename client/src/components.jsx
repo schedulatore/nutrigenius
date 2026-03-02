@@ -27,8 +27,27 @@ export const MiniBarChart = ({ data, labels, maxVal, color }) => {
       <div style={{ fontSize: ".65rem", color: "var(--t3)" }}>{labels && labels[i]}</div></div>))}</div>);
 };
 export const CATS = ["Frutta","Verdura","Carne","Pesce","Latticini","Cereali","Legumi","Frutta secca","Condimenti","Proteine","Altro"];
-export const BADGES = [{id:1,name:"Principiante",icon:"\u{1F331}",desc:"Primo giorno",req:1},{id:2,name:"Costante",icon:"\u{1F525}",desc:"7 giorni",req:7},{id:3,name:"Esperto",icon:"\u2B50",desc:"30 giorni",req:30},{id:4,name:"Maestro",icon:"\u{1F451}",desc:"90 giorni",req:90},{id:5,name:"Leggenda",icon:"\u{1F3C6}",desc:"365 giorni",req:365}];
-export const CHALLS = [{id:1,name:"5 Porzioni",desc:"Frutta/verdura",target:7,icon:"\u{1F966}",xp:100,progress:0},{id:2,name:"Proteine Power",desc:"Target 5gg",target:5,icon:"\u{1F4AA}",xp:150,progress:0},{id:3,name:"Budget Master",desc:"4 settimane",target:4,icon:"\u{1F4B0}",xp:200,progress:0},{id:4,name:"Tracker Pro",desc:"7gg consecutivi",target:7,icon:"\u{1F4CA}",xp:120,progress:0}];
+export const BADGES = [
+  {id:1,name:"Principiante",icon:"🌱",desc:"Primo giorno tracciato",req:1},
+  {id:2,name:"Costante",icon:"🔥",desc:"7 giorni di tracking",req:7},
+  {id:3,name:"Disciplinato",icon:"💎",desc:"14 giorni consecutivi",req:14},
+  {id:4,name:"Esperto",icon:"⭐",desc:"30 giorni di impegno",req:30},
+  {id:5,name:"Guerriero",icon:"⚔️",desc:"60 giorni inarrestabile",req:60},
+  {id:6,name:"Maestro",icon:"👑",desc:"90 giorni di dedizione",req:90},
+  {id:7,name:"Leggenda",icon:"🏆",desc:"365 giorni - un anno!",req:365},
+];
+export const CHALLS = [
+  {id:"c1",name:"5 Porzioni al Giorno",desc:"Mangia 5 porzioni di frutta/verdura per 7 giorni",target:7,icon:"🥦",xp:100,category:"Nutrizione"},
+  {id:"c2",name:"Proteine Power",desc:"Raggiungi il target proteine per 5 giorni",target:5,icon:"💪",xp:150,category:"Macro"},
+  {id:"c3",name:"Budget Master",desc:"Resta nel budget spesa per 4 settimane",target:4,icon:"💰",xp:200,category:"Risparmio"},
+  {id:"c4",name:"Tracker Pro",desc:"Traccia i pasti per 7 giorni consecutivi",target:7,icon:"📊",xp:120,category:"Costanza"},
+  {id:"c5",name:"Idratazione",desc:"Registra almeno 8 bicchieri d'acqua per 5 giorni",target:5,icon:"💧",xp:80,category:"Benessere"},
+  {id:"c6",name:"Chef Casalingo",desc:"Prepara 10 ricette dal piano settimanale",target:10,icon:"👨‍🍳",xp:180,category:"Cucina"},
+  {id:"c7",name:"Peso Forma",desc:"Registra il peso per 14 giorni",target:14,icon:"⚖️",xp:160,category:"Monitoraggio"},
+  {id:"c8",name:"Streak Infuocata",desc:"Mantieni una streak di 21 giorni",target:21,icon:"🔥",xp:250,category:"Costanza"},
+  {id:"c9",name:"Zero Sprechi",desc:"Completa tutta la lista spesa per 3 settimane",target:3,icon:"♻️",xp:140,category:"Risparmio"},
+  {id:"c10",name:"Equilibrio Perfetto",desc:"Centra tutti i macro (±10%) per 5 giorni",target:5,icon:"🎯",xp:200,category:"Macro"},
+];
 export const calcBMR=(w,h,a,g)=>g==="M"?10*w+6.25*h-5*a+5:10*w+6.25*h-5*a-161;
 export const calcTDEE=(bmr,act)=>Math.round(bmr*({sedentario:1.2,leggero:1.375,moderato:1.55,attivo:1.725,molto_attivo:1.9}[act]||1.2));
 export const calcGoalCal=(tdee,goal)=>goal==="dimagrimento"?Math.round(tdee*.8):goal==="massa"?Math.round(tdee*1.15):tdee;

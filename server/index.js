@@ -62,7 +62,17 @@ app.get("/api/auth/me", auth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: "Errore" }); }
 });
 
-// === PROFILE ===
+// === UPDATE USER NAME ===
+app.patch("/api/auth/me", auth, async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ error: "Nome obbligatorio" });
+    await db.execute({ sql: "UPDATE users SET name = ? WHERE id = ?", args: [name, req.user.id] });
+    res.json({ ok: true, name });
+  } catch (e) { res.status(500).json({ error: "Errore" }); }
+});
+
+// === PROFILE (editable) ===
 app.get("/api/profile", auth, async (req, res) => {
   try {
     const r = await db.execute({ sql: "SELECT * FROM profiles WHERE user_id = ?", args: [req.user.id] });
@@ -91,7 +101,7 @@ app.post("/api/profile", auth, async (req, res) => {
   } catch (e) { console.error("Profile:", e.message); res.status(500).json({ error: "Errore profilo" }); }
 });
 
-// === FOODS ===
+// === FOODS (with custom food CRUD) ===
 app.get("/api/foods", auth, async (req, res) => {
   try {
     const r = await db.execute({ sql: "SELECT * FROM foods WHERE is_default = 1 OR created_by = ? ORDER BY category, name", args: [req.user.id] });
@@ -107,7 +117,41 @@ app.get("/api/foods/search", auth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: "Errore" }); }
 });
 
-// === DIARY ===
+// NEW: Create custom food
+app.post("/api/foods", auth, async (req, res) => {
+  try {
+    const { name, calories, protein, carbs, fat, category, price, unit } = req.body;
+    if (!name || calories == null) return res.status(400).json({ error: "Nome e calorie obbligatori" });
+    const r = await db.execute({
+      sql: "INSERT INTO foods (name, calories, protein, carbs, fat, category, price, unit, created_by, is_default) VALUES (?,?,?,?,?,?,?,?,?,0)",
+      args: [name, calories, protein || 0, carbs || 0, fat || 0, category || "Altro", price || 0, unit || "kg", req.user.id]
+    });
+    const inserted = await db.execute({ sql: "SELECT * FROM foods WHERE rowid = last_insert_rowid()" });
+    res.status(201).json(inserted.rows[0] || { name, calories, protein, carbs, fat, category });
+  } catch (e) { console.error("AddFood:", e.message); res.status(500).json({ error: "Errore" }); }
+});
+
+// NEW: Update custom food
+app.put("/api/foods/:id", auth, async (req, res) => {
+  try {
+    const { name, calories, protein, carbs, fat, category, price, unit } = req.body;
+    await db.execute({
+      sql: "UPDATE foods SET name=?, calories=?, protein=?, carbs=?, fat=?, category=?, price=?, unit=? WHERE id=? AND created_by=?",
+      args: [name, calories, protein || 0, carbs || 0, fat || 0, category || "Altro", price || 0, unit || "kg", req.params.id, req.user.id]
+    });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: "Errore" }); }
+});
+
+// NEW: Delete custom food
+app.delete("/api/foods/:id", auth, async (req, res) => {
+  try {
+    await db.execute({ sql: "DELETE FROM foods WHERE id = ? AND created_by = ?", args: [req.params.id, req.user.id] });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: "Errore" }); }
+});
+
+// === DIARY (with edit) ===
 app.get("/api/diary/today", auth, async (req, res) => {
   try {
     const r = await db.execute({ sql: "SELECT * FROM diary_entries WHERE user_id = ? AND entry_date = ? ORDER BY entry_time DESC", args: [req.user.id, td()] });
@@ -124,7 +168,6 @@ app.post("/api/diary", auth, async (req, res) => {
       sql: "INSERT INTO diary_entries (id, user_id, food_id, food_name, portion, calories, protein, carbs, fat, meal_type, entry_date, entry_time) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
       args: [id, req.user.id, d.food_id || null, d.food_name, d.portion || 100, d.calories, d.protein || 0, d.carbs || 0, d.fat || 0, d.meal_type || "altro", td(), time]
     });
-    // Update stats
     const s = await db.execute({ sql: "SELECT * FROM user_stats WHERE user_id = ?", args: [req.user.id] });
     if (s.rows.length && s.rows[0].last_tracked_date !== td()) {
       const prev = s.rows[0];
@@ -135,8 +178,20 @@ app.post("/api/diary", auth, async (req, res) => {
         args: [td(), streak, req.user.id]
       });
     }
-    res.status(201).json({ id, food_name: d.food_name, portion: d.portion, calories: d.calories, protein: d.protein, carbs: d.carbs, fat: d.fat, entry_date: td(), entry_time: time });
+    res.status(201).json({ id, food_name: d.food_name, portion: d.portion, calories: d.calories, protein: d.protein, carbs: d.carbs, fat: d.fat, meal_type: d.meal_type, entry_date: td(), entry_time: time });
   } catch (e) { console.error("Diary:", e.message); res.status(500).json({ error: "Errore" }); }
+});
+
+// NEW: Edit diary entry
+app.put("/api/diary/:id", auth, async (req, res) => {
+  try {
+    const d = req.body;
+    await db.execute({
+      sql: "UPDATE diary_entries SET food_name=?, portion=?, calories=?, protein=?, carbs=?, fat=?, meal_type=? WHERE id=? AND user_id=?",
+      args: [d.food_name, d.portion, d.calories, d.protein || 0, d.carbs || 0, d.fat || 0, d.meal_type || "altro", req.params.id, req.user.id]
+    });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: "Errore" }); }
 });
 
 app.delete("/api/diary/:id", auth, async (req, res) => {
@@ -186,7 +241,7 @@ app.get("/api/mealplan", auth, async (req, res) => {
     for (const row of r.rows) {
       if (!plan[row.day_name]) plan[row.day_name] = {};
       plan[row.day_name][row.meal_type] = {
-        name: row.meal_name, desc: row.meal_desc,
+        id: row.id, name: row.meal_name, desc: row.meal_desc,
         foods: JSON.parse(row.foods_json), portions: JSON.parse(row.portions_json),
         total_calories: row.total_calories
       };
@@ -215,16 +270,17 @@ app.post("/api/mealplan/generate", auth, async (req, res) => {
           const f = fm[meal.foods[i]];
           if (f) tc += Math.round(f.calories * meal.portions[i] / 100);
         }
+        const mealId = uid();
         await db.execute({
           sql: "INSERT INTO meal_plans (id, user_id, day_name, meal_type, meal_name, meal_desc, foods_json, portions_json, total_calories) VALUES (?,?,?,?,?,?,?,?,?)",
-          args: [uid(), req.user.id, day, type, meal.name, meal.desc, JSON.stringify(meal.foods), JSON.stringify(meal.portions), tc]
+          args: [mealId, req.user.id, day, type, meal.name, meal.desc, JSON.stringify(meal.foods), JSON.stringify(meal.portions), tc]
         });
-        plan[day][type] = { name: meal.name, desc: meal.desc, foods: meal.foods, portions: meal.portions, total_calories: tc };
+        plan[day][type] = { id: mealId, name: meal.name, desc: meal.desc, foods: meal.foods, portions: meal.portions, total_calories: tc };
       }
     }
 
     // Shopping list
-    await db.execute({ sql: "DELETE FROM shopping_items WHERE user_id = ?", args: [req.user.id] });
+    await db.execute({ sql: "DELETE FROM shopping_items WHERE user_id = ? AND is_manual = 0", args: [req.user.id] });
     const agg = {};
     for (const day of Object.values(plan)) {
       for (const meal of Object.values(day)) {
@@ -239,7 +295,7 @@ app.post("/api/mealplan/generate", auth, async (req, res) => {
     }
     for (const item of Object.values(agg)) {
       await db.execute({
-        sql: "INSERT INTO shopping_items (id, user_id, food_id, food_name, category, quantity, unit, price) VALUES (?,?,?,?,?,?,?,?)",
+        sql: "INSERT INTO shopping_items (id, user_id, food_id, food_name, category, quantity, unit, price, is_manual) VALUES (?,?,?,?,?,?,?,?,0)",
         args: [uid(), req.user.id, item.id, item.name, item.category, item.qty, item.unit, item.price]
       });
     }
@@ -247,7 +303,7 @@ app.post("/api/mealplan/generate", auth, async (req, res) => {
   } catch (e) { console.error("Mealplan:", e.message); res.status(500).json({ error: "Errore" }); }
 });
 
-// === SHOPPING ===
+// === SHOPPING (full CRUD) ===
 app.get("/api/shopping", auth, async (req, res) => {
   try {
     const r = await db.execute({ sql: "SELECT * FROM shopping_items WHERE user_id = ? ORDER BY category, food_name", args: [req.user.id] });
@@ -261,6 +317,40 @@ app.patch("/api/shopping/:id/toggle", auth, async (req, res) => {
       sql: "UPDATE shopping_items SET checked = CASE WHEN checked = 0 THEN 1 ELSE 0 END WHERE id = ? AND user_id = ?",
       args: [req.params.id, req.user.id]
     });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: "Errore" }); }
+});
+
+// NEW: Add manual shopping item
+app.post("/api/shopping", auth, async (req, res) => {
+  try {
+    const { food_name, category, quantity, unit, price } = req.body;
+    if (!food_name) return res.status(400).json({ error: "Nome obbligatorio" });
+    const id = uid();
+    await db.execute({
+      sql: "INSERT INTO shopping_items (id, user_id, food_name, category, quantity, unit, price, is_manual) VALUES (?,?,?,?,?,?,?,1)",
+      args: [id, req.user.id, food_name, category || "Altro", quantity || 1, unit || "pz", price || 0]
+    });
+    res.status(201).json({ id, food_name, category: category || "Altro", quantity: quantity || 1, unit: unit || "pz", price: price || 0, checked: 0, is_manual: 1 });
+  } catch (e) { res.status(500).json({ error: "Errore" }); }
+});
+
+// NEW: Edit shopping item
+app.put("/api/shopping/:id", auth, async (req, res) => {
+  try {
+    const { food_name, category, quantity, unit, price } = req.body;
+    await db.execute({
+      sql: "UPDATE shopping_items SET food_name=?, category=?, quantity=?, unit=?, price=? WHERE id=? AND user_id=?",
+      args: [food_name, category || "Altro", quantity || 1, unit || "pz", price || 0, req.params.id, req.user.id]
+    });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: "Errore" }); }
+});
+
+// NEW: Delete shopping item
+app.delete("/api/shopping/:id", auth, async (req, res) => {
+  try {
+    await db.execute({ sql: "DELETE FROM shopping_items WHERE id = ? AND user_id = ?", args: [req.params.id, req.user.id] });
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: "Errore" }); }
 });
@@ -287,7 +377,7 @@ app.post("/api/weight", auth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: "Errore" }); }
 });
 
-// === CHAT ===
+// === CHAT (enhanced with recipe links) ===
 app.get("/api/chat", auth, async (req, res) => {
   try {
     const r = await db.execute({ sql: "SELECT * FROM chat_messages WHERE user_id = ? ORDER BY created_at ASC LIMIT 100", args: [req.user.id] });
@@ -308,22 +398,69 @@ app.post("/api/chat", auth, async (req, res) => {
     const low = message.toLowerCase();
     let resp;
     if (low.includes("calorie") || low.includes("kcal")) {
-      resp = "Oggi: " + (tds.cal || 0) + " kcal su " + (prof.target_calories || "?") + " target. " + ((tds.cal || 0) < (prof.target_calories || 2000) ? "Hai margine! 💪" : "Vicino al target!");
+      const cal = tds.cal || 0;
+      const target = prof.target_calories || 2000;
+      const diff = target - cal;
+      resp = `Oggi hai consumato ${cal} kcal su ${target} target. ${diff > 0 ? `Ti restano ${diff} kcal. Tieni duro! 💪` : "Hai raggiunto il target! Ottimo lavoro! 🎉"}`;
     } else if (low.includes("peso")) {
-      resp = "Peso: " + (prof.weight || "?") + " kg, obiettivo " + (prof.target_weight || "?") + " kg. Piano: " + (prof.goal || "mantenimento") + ".";
+      const diff = (prof.weight || 0) - (prof.target_weight || 0);
+      resp = `Peso attuale: ${prof.weight || "?"} kg. Obiettivo: ${prof.target_weight || "?"} kg. ${diff > 0 ? `Ti mancano ${diff.toFixed(1)} kg — ce la fai!` : diff < 0 ? `Sei ${Math.abs(diff).toFixed(1)} kg sotto l'obiettivo!` : "Sei al tuo peso ideale! 🌟"} Piano: ${prof.goal || "mantenimento"}.`;
     } else if (low.includes("macro") || low.includes("proteine")) {
-      resp = "Target: " + (prof.macro_prot || "?") + "g prot, " + (prof.macro_carb || "?") + "g carb, " + (prof.macro_fat || "?") + "g grassi.";
-    } else if (low.includes("ricetta")) {
-      resp = "Idea: Bowl Quinoa Mediterraneo - quinoa, pomodorini, feta, olive, olio EVO. ~420 kcal, 20 min!";
-    } else if (low.includes("motivaz")) {
-      resp = "Ogni piccolo passo conta! Costanza batte perfezione! 🌟";
+      resp = `Target giornalieri: ${prof.macro_prot || "?"}g proteine, ${prof.macro_carb || "?"}g carboidrati, ${prof.macro_fat || "?"}g grassi. Oggi: ${tds.prot || 0}g proteine consumate.`;
+    } else if (low.includes("ricett") || low.includes("cucin") || low.includes("prepara")) {
+      const recipes = [
+        { name: "Bowl Quinoa Mediterraneo", desc: "quinoa, pomodorini, feta, olive, olio EVO", cal: 420, time: 20, url: "https://www.giallozafferano.it/ricerca-ricette/quinoa/" },
+        { name: "Salmone al forno con verdure", desc: "salmone, zucchine, patate dolci, limone", cal: 380, time: 30, url: "https://www.giallozafferano.it/ricerca-ricette/salmone+al+forno/" },
+        { name: "Pasta integrale al pesto di spinaci", desc: "pasta, spinaci, mandorle, parmigiano", cal: 450, time: 15, url: "https://www.giallozafferano.it/ricerca-ricette/pesto+spinaci/" },
+        { name: "Poke bowl proteico", desc: "riso, tonno, avocado, edamame, sesamo", cal: 520, time: 15, url: "https://www.giallozafferano.it/ricerca-ricette/poke+bowl/" },
+        { name: "Zuppa di lenticchie e curcuma", desc: "lenticchie, carote, curcuma, zenzero", cal: 280, time: 25, url: "https://www.giallozafferano.it/ricerca-ricette/zuppa+lenticchie/" },
+      ];
+      const r = recipes[Math.floor(Math.random() * recipes.length)];
+      resp = `🍳 **${r.name}**\n${r.desc}\n~${r.cal} kcal • ${r.time} min\n🔗 Cerca ricette simili: ${r.url}`;
+    } else if (low.includes("motivaz") || low.includes("aiut") || low.includes("difficile")) {
+      const quotes = [
+        "Ogni piccolo passo conta! La costanza batte la perfezione. 🌟",
+        "Non stai solo cambiando dieta, stai costruendo una nuova versione di te stesso! 💪",
+        "I risultati arrivano per chi non molla. Sei gia a buon punto! 🏆",
+        "Un giorno alla volta. Oggi e il giorno perfetto per fare la scelta giusta! 🌱",
+        "Il tuo corpo ti ringraziera. Ogni pasto sano e un investimento! ❤️",
+      ];
+      resp = quotes[Math.floor(Math.random() * quotes.length)];
+    } else if (low.includes("consiglio") || low.includes("suggerim") || low.includes("cosa mang")) {
+      const cal = tds.cal || 0;
+      const target = prof.target_calories || 2000;
+      const remaining = target - cal;
+      if (remaining > 500) resp = `Hai ancora ${remaining} kcal disponibili. Ti consiglio un pasto completo: proteine + verdure + cereali integrali! 🥗`;
+      else if (remaining > 200) resp = `Ti restano ${remaining} kcal. Perfetto per uno spuntino leggero: yogurt greco con frutta o una manciata di mandorle! 🍎`;
+      else resp = `Sei quasi al target (${remaining} kcal restanti). Se hai fame, opta per verdure crude o una tisana! 🍵`;
     } else {
-      resp = "Posso aiutarti con: calorie, macro, peso, ricette, motivazione! 😊";
+      resp = "Ciao! Posso aiutarti con: 🔥 calorie, 💪 macro, ⚖️ peso, 🍳 ricette (con link!), 💡 consigli, 🌟 motivazione. Cosa ti serve?";
     }
 
     await db.execute({ sql: "INSERT INTO chat_messages (id, user_id, role, message) VALUES (?, ?, 'ai', ?)", args: [aId, req.user.id, resp] });
     res.json({ userMsg: { id: uId, role: "user", message }, aiMsg: { id: aId, role: "ai", message: resp } });
   } catch (e) { console.error("Chat:", e.message); res.status(500).json({ error: "Errore" }); }
+});
+
+// === CHALLENGES ===
+app.get("/api/challenges", auth, async (req, res) => {
+  try {
+    const r = await db.execute({ sql: "SELECT * FROM challenge_progress WHERE user_id = ?", args: [req.user.id] });
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: "Errore" }); }
+});
+
+app.post("/api/challenges/:id/progress", auth, async (req, res) => {
+  try {
+    const { progress } = req.body;
+    const exists = await db.execute({ sql: "SELECT * FROM challenge_progress WHERE user_id = ? AND challenge_id = ?", args: [req.user.id, req.params.id] });
+    if (exists.rows.length) {
+      await db.execute({ sql: "UPDATE challenge_progress SET progress = ? WHERE user_id = ? AND challenge_id = ?", args: [progress, req.user.id, req.params.id] });
+    } else {
+      await db.execute({ sql: "INSERT INTO challenge_progress (id, user_id, challenge_id, progress) VALUES (?,?,?,?)", args: [uid(), req.user.id, req.params.id, progress] });
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: "Errore" }); }
 });
 
 // === DASHBOARD ===
@@ -341,7 +478,7 @@ app.get("/api/dashboard", auth, async (req, res) => {
       todayEntries: todayDiary.rows,
       weeklyStats: weekly.rows,
       weightLog: weight.rows,
-      stats: stats.rows[0] || { xp: 0, days_tracked: 0, streak: 0 },
+      stats: stats.rows[0] || { xp: 0, days_tracked: 0, streak: 0, challenges_done: 0 },
       shoppingTotal: shop.rows[0] ? shop.rows[0].total || 0 : 0,
     });
   } catch (e) { console.error("Dashboard:", e.message); res.status(500).json({ error: "Errore" }); }
@@ -355,5 +492,5 @@ if (process.env.NODE_ENV === "production") {
 }
 
 app.listen(PORT, () => {
-  console.log("🥗 NutriGenius API on port " + PORT);
+  console.log("🥗 NutriGenius v2 API on port " + PORT);
 });

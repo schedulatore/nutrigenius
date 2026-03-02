@@ -1,4 +1,20 @@
-# NutriGenius
+# NutriGenius v2
+
+## Novita v2
+- Profilo completamente modificabile (peso, altezza, obiettivo, budget, ecc)
+- Alimenti custom (crea i tuoi alimenti con nome, kcal, proteine, carbs, grassi)
+- Diario editabile (modifica/elimina ogni voce inserita)
+- Spesa: aggiungi/modifica/elimina articoli manualmente
+- Chef AI: link a ricette reali su Giallozafferano, Cucchiaio d'Argento, Fattoincasa
+- Coach AI: risposte piu ricche con link e consigli personalizzati
+- 10 sfide con categorie e tracking progressi
+- 7 badge sbloccabili
+- Fix freeze popup (rimosso autoFocus problematico)
+- Light mode: contrasti corretti, testo leggibile
+- Dark/Light toggle visibile su mobile (nella sidebar)
+- Toast notifications per feedback visivo
+- Selezione porzione quando aggiungi un alimento
+- Design premium con animazioni e micro-interazioni
 
 ## Deploy (tutto da browser)
 
@@ -7,9 +23,12 @@
 - Copia Database URL e Auth Token
 
 ### 2. GitHub
-- Crea repo nutrigenius → Upload files dallo zip
+- Sostituisci i file nel repo con quelli nuovi
+- Commit e push
 
 ### 3. Render (render.com)
-- New → Web Service → collega repo
-- In Environment aggiungi TURSO_DATABASE_URL e TURSO_AUTH_TOKEN
-- Create Web Service → aspetta 3-5 min
+- Il deploy parte automaticamente dal push
+- Verifica env vars: TURSO_DATABASE_URL, TURSO_AUTH_TOKEN
+
+### Migrazione DB
+La migrazione v2 aggiunge le nuove colonne/tabelle automaticamente senza perdere dati.
